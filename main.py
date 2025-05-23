@@ -24,7 +24,10 @@ from image_data_processing import (
 )
 
 from output_filter import filter_specific_output  # Import the context manager
-from nexa.gguf import NexaVLMInference, NexaTextInference  # Import model classes
+from llama_cpp import Llama
+# We might need LlamaGrammar or chat handlers later, but for now, just Llama is fine for model loading.
+# For LLaVA, we will need a chat handler. Let's add Llava15ChatHandler.
+from llama_cpp.llama_chat_format import Llava15ChatHandler
 
 def ensure_nltk_data():
     """Ensure that NLTK data is downloaded efficiently and quietly."""
@@ -45,33 +48,33 @@ def initialize_models():
         model_path = "llava-v1.6-vicuna-7b:q4_0"
         model_path_text = "Llama3.2-3B-Instruct:q3_K_M"
 
+        # For LLaVA model (image_inference)
+        # Assumes mmproj file is named by appending "-mmproj.gguf" to the main model name
+        # e.g. if model_path is "llava-v1.6-vicuna-7b:q4_0", mmproj is "llava-v1.6-vicuna-7b-mmproj.gguf"
+        # The :q4_0 part is a quantization indicator and should be removed for the mmproj filename.
+        base_model_name = model_path.split(':')[0] # Get "llava-v1.6-vicuna-7b"
+        model_path_llava_mmproj = f"{base_model_name}-mmproj.gguf"
+
         # Use the filter_specific_output context manager
         with filter_specific_output():
-            # Initialize the image inference model
-            image_inference = NexaVLMInference(
-                model_path=model_path,
-                local_path=None,
-                stop_words=[],
-                temperature=0.3,
-                max_new_tokens=3000,
-                top_k=3,
-                top_p=0.2,
-                profiling=False
-                # add n_ctx if out of context window usage: n_ctx=2048
+            # Initialize the LLaVA chat handler
+            chat_handler_llava = Llava15ChatHandler(clip_model_path=model_path_llava_mmproj, verbose=True)
+
+            # Initialize the image inference model (LLaVA)
+            image_inference = Llama(
+                model_path=model_path,  # This is the main LLaVA model GGUF
+                chat_handler=chat_handler_llava,
+                n_ctx=2048,  # Default context size, can be adjusted
+                n_gpu_layers=0, # Ensure CPU usage
+                verbose=True # For debugging
             )
 
             # Initialize the text inference model
-            text_inference = NexaTextInference(
+            text_inference = Llama(
                 model_path=model_path_text,
-                local_path=None,
-                stop_words=[],
-                temperature=0.5,
-                max_new_tokens=3000,  # Adjust as needed
-                top_k=3,
-                top_p=0.3,
-                profiling=False
-                # add n_ctx if out of context window usage: n_ctx=2048
-
+                n_ctx=2048,  # Default context size
+                n_gpu_layers=0, # Ensure CPU usage
+                verbose=True # For debugging
             )
         print("**----------------------------------------------**")
         print("**       Image inference model initialized      **")

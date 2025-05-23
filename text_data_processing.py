@@ -18,7 +18,14 @@ Text: {text}
 
 Summary:"""
 
-    response = text_inference.create_completion(prompt)
+    response = text_inference.create_completion(
+        prompt=prompt,
+        max_tokens=3000,  # from max_new_tokens
+        temperature=0.5,
+        top_k=3,
+        top_p=0.3,
+        stop=[]  # from stop_words
+    )
     summary = response['choices'][0]['text'].strip()
     return summary
 
@@ -90,7 +97,14 @@ Now generate the filename.
 Output only the filename, without any additional text.
 
 Filename:"""
-    filename_response = text_inference.create_completion(filename_prompt)
+    filename_response = text_inference.create_completion(
+        prompt=filename_prompt,
+        max_tokens=3000,
+        temperature=0.5,
+        top_k=3,
+        top_p=0.3,
+        stop=[]
+    )
     filename = filename_response['choices'][0]['text'].strip()
     # Remove 'Filename:' prefix if present
     filename = re.sub(r'^Filename:\s*', '', filename, flags=re.IGNORECASE).strip()
@@ -115,7 +129,14 @@ Now generate the category.
 Output only the category, without any additional text.
 
 Category:"""
-    foldername_response = text_inference.create_completion(foldername_prompt)
+    foldername_response = text_inference.create_completion(
+        prompt=foldername_prompt,
+        max_tokens=3000,
+        temperature=0.5,
+        top_k=3,
+        top_p=0.3,
+        stop=[]
+    )
     foldername = foldername_response['choices'][0]['text'].strip()
     # Remove 'Category:' prefix if present
     foldername = re.sub(r'^Category:\s*', '', foldername, flags=re.IGNORECASE).strip()
