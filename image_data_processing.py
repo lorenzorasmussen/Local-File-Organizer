@@ -69,7 +69,7 @@ def generate_image_metadata(image_path, progress, task_id, image_inference, text
 
     # Step 1: Generate description using image_inference
     description_prompt = "Please provide a detailed description of this image, focusing on the main subject and any important details."
-    
+
     # Convert image_path to a file:// URI
     image_uri = pathlib.Path(image_path).as_uri()
 
