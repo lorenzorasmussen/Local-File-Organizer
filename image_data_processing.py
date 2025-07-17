@@ -1,26 +1,27 @@
 import re
 import os
 import time
+import pathlib # Added for file URI
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn
 from data_processing_common import sanitize_filename  # Import sanitize_filename
 
-def get_text_from_generator(generator):
-    """Extract text from the generator response."""
-    response_text = ""
-    try:
-        while True:
-            response = next(generator)
-            choices = response.get('choices', [])
-            for choice in choices:
-                delta = choice.get('delta', {})
-                if 'content' in delta:
-                    response_text += delta['content']
-    except StopIteration:
-        pass
-    return response_text
+# def get_text_from_generator(generator):
+#     """Extract text from the generator response."""
+#     response_text = ""
+#     try:
+#         while True:
+#             response = next(generator)
+#             choices = response.get('choices', [])
+#             for choice in choices:
+#                 delta = choice.get('delta', {})
+#                 if 'content' in delta:
+#                     response_text += delta['content']
+#     except StopIteration:
+#         pass
+#     return response_text
 
 def process_single_image(image_path, image_inference, text_inference, silent=False, log_file=None):
     """Process a single image file to generate metadata."""
@@ -68,8 +69,32 @@ def generate_image_metadata(image_path, progress, task_id, image_inference, text
 
     # Step 1: Generate description using image_inference
     description_prompt = "Please provide a detailed description of this image, focusing on the main subject and any important details."
-    description_generator = image_inference._chat(description_prompt, image_path)
-    description = get_text_from_generator(description_generator).strip()
+
+    # Convert image_path to a file:// URI
+    image_uri = pathlib.Path(image_path).as_uri()
+
+    # Create the messages list for create_chat_completion
+    messages = [
+        {"role": "system", "content": "You are an assistant who describes images."},
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": image_uri}},
+                {"type": "text", "text": description_prompt}
+            ]
+        }
+    ]
+
+    # Call image_inference.create_chat_completion
+    response = image_inference.create_chat_completion(
+        messages=messages,
+        temperature=0.3,
+        max_tokens=3000,
+        top_k=3,
+        top_p=0.2,
+        stop=[]
+    )
+    description = response['choices'][0]['message']['content'].strip()
     progress.update(task_id, advance=1 / total_steps)
 
     # Step 2: Generate filename using text_inference
