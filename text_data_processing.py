@@ -19,7 +19,10 @@ Text: {text}
 Summary:"""
 
     response = text_inference.create_completion(prompt)
-    summary = response['choices'][0]['text'].strip()
+    if response['choices'] and response['choices'][0]['text']:
+        summary = response['choices'][0]['text'].strip()
+    else:
+        summary = ""
     return summary
 
 def process_single_text_file(args, text_inference, silent=False, log_file=None):

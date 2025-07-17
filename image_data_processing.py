@@ -89,7 +89,10 @@ Output only the filename, without any additional text.
 
 Filename:"""
     filename_response = text_inference.create_completion(filename_prompt)
-    filename = filename_response['choices'][0]['text'].strip()
+    if filename_response['choices'] and filename_response['choices'][0]['text']:
+        filename = filename_response['choices'][0]['text'].strip()
+    else:
+        filename = ""
     # Remove 'Filename:' prefix if present
     filename = re.sub(r'^Filename:\s*', '', filename, flags=re.IGNORECASE).strip()
     progress.update(task_id, advance=1 / total_steps)
@@ -117,7 +120,10 @@ Output only the category, without any additional text.
 
 Category:"""
     foldername_response = text_inference.create_completion(foldername_prompt)
-    foldername = foldername_response['choices'][0]['text'].strip()
+    if foldername_response['choices'] and foldername_response['choices'][0]['text']:
+        foldername = foldername_response['choices'][0]['text'].strip()
+    else:
+        foldername = ""
     # Remove 'Category:' prefix if present
     foldername = re.sub(r'^Category:\s*', '', foldername, flags=re.IGNORECASE).strip()
     progress.update(task_id, advance=1 / total_steps)
