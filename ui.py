@@ -1,0 +1,83 @@
+import os
+
+def get_yes_no(prompt):
+    """Prompt the user for a yes/no response."""
+    while True:
+        response = input(prompt).strip().lower()
+        if response in ('yes', 'y'):
+            return True
+        elif response in ('no', 'n'):
+            return False
+        elif response == '/exit':
+            print("Exiting program.")
+            exit()
+        else:
+            print("Please enter 'yes' or 'no'. To exit, type '/exit'.")
+
+def get_mode_selection():
+    """Prompt the user to select a mode."""
+    while True:
+        print("Please choose the mode to organize your files:")
+        print("1. By Content")
+        print("2. By Date")
+        print("3. By Type")
+        response = input("Enter 1, 2, or 3 (or type '/exit' to exit): ").strip()
+        if response == '/exit':
+            print("Exiting program.")
+            exit()
+        elif response == '1':
+            return 'content'
+        elif response == '2':
+            return 'date'
+        elif response == '3':
+            return 'type'
+        else:
+            print("Invalid selection. Please enter 1, 2, or 3. To exit, type '/exit'.")
+
+def get_paths(silent_mode, log_file):
+    """Get input and output paths from the user."""
+    if not silent_mode:
+        print("-" * 50)
+
+    input_path = input("Enter the path of the directory you want to organize: ").strip()
+    while not os.path.exists(input_path):
+        message = f"Input path {input_path} does not exist. Please enter a valid path."
+        if silent_mode:
+            with open(log_file, 'a') as f:
+                f.write(message + '\n')
+        else:
+            print(message)
+        input_path = input("Enter the path of the directory you want to organize: ").strip()
+
+    message = f"Input path successfully uploaded: {input_path}"
+    if silent_mode:
+        with open(log_file, 'a') as f:
+            f.write(message + '\n')
+    else:
+        print(message)
+    if not silent_mode:
+        print("-" * 50)
+
+    output_path = input("Enter the path to store organized files and folders (press Enter to use 'organized_folder' in the input directory): ").strip()
+    if not output_path:
+        output_path = os.path.join(os.path.dirname(input_path), 'organized_folder')
+
+    message = f"Output path successfully set to: {output_path}"
+    if silent_mode:
+        with open(log_file, 'a') as f:
+            f.write(message + '\n')
+    else:
+        print(message)
+    if not silent_mode:
+        print("-" * 50)
+
+    return input_path, output_path
+
+def print_simulated_tree(tree, prefix=''):
+    """Print the simulated directory tree."""
+    pointers = ['├── '] * (len(tree) - 1) + ['└── '] if tree else []
+    for pointer, key in zip(pointers, tree):
+        print(prefix + pointer + key)
+        if tree[key]:
+            extension = '│   ' if pointer == '├── ' else '    '
+            print_simulated_tree(tree[key], prefix + extension)
