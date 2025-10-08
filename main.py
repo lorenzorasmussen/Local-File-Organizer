@@ -15,10 +15,12 @@ from data_processing_common import (
 )
 from text_data_processing import process_text_files
 from image_data_processing import process_image_files
+from ollama_data_processing import process_text_files_ollama, process_image_files_ollama
 from output_filter import filter_specific_output
 from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Llava15ChatHandler
-from ui import get_yes_no, get_mode_selection, get_paths, print_simulated_tree
+from ui import get_yes_no, get_mode_selection, get_paths, print_simulated_tree, get_backend_selection, get_main_menu_selection
+from watch_mode import start_watching
 
 def ensure_nltk_data():
     """Ensure that NLTK data is downloaded efficiently and quietly."""
@@ -85,34 +87,30 @@ def simulate_directory_tree(operations, base_path):
             current_level = current_level[part]
     return tree
 
-def main():
-    ensure_nltk_data()
-    dry_run = True
-    print("-" * 50)
-    print("**NOTE: Silent mode logs all outputs to a text file instead of displaying them in the terminal.")
-    silent_mode = get_yes_no("Would you like to enable silent mode? (yes/no): ")
-    log_file = config.LOG_FILE if silent_mode else None
+def organize_directory_once(silent_mode, log_file):
+    """Handles the one-time organization of a directory."""
+    input_path, output_path = get_paths(silent_mode, log_file)
+    start_time = time.time()
+    file_paths = collect_file_paths(input_path)
+    end_time = time.time()
+    message = f"Time taken to load file paths: {end_time - start_time:.2f} seconds"
+    if silent_mode:
+        with open(log_file, 'a') as f:
+            f.write(message + '\n')
+    else:
+        print(message)
+
+    if not silent_mode:
+        print("-" * 50)
+        print("Directory tree before organizing:")
+        display_directory_tree(input_path)
+        print("*" * 50)
 
     while True:
-        input_path, output_path = get_paths(silent_mode, log_file)
-        start_time = time.time()
-        file_paths = collect_file_paths(input_path)
-        end_time = time.time()
-        message = f"Time taken to load file paths: {end_time - start_time:.2f} seconds"
-        if silent_mode:
-            with open(log_file, 'a') as f:
-                f.write(message + '\n')
-        else:
-            print(message)
-        if not silent_mode:
-            print("-" * 50)
-            print("Directory tree before organizing:")
-            display_directory_tree(input_path)
-            print("*" * 50)
-
-        while True:
-            mode = get_mode_selection()
-            if mode == config.CONTENT_MODE:
+        mode = get_mode_selection()
+        if mode == config.CONTENT_MODE:
+            backend = get_backend_selection()
+            if backend == 'local':
                 if not silent_mode:
                     print("Checking if the model is already downloaded. If not, downloading it now.")
                 initialize_models()
@@ -135,54 +133,97 @@ def main():
                     text_tuples.append((fp, text_content))
                 data_images = process_image_files(image_files, image_inference, text_inference, silent=silent_mode, log_file=log_file)
                 data_texts = process_text_files(text_tuples, text_inference, silent=silent_mode, log_file=log_file)
-                all_data = data_images + data_texts
-                operations = compute_operations(all_data, output_path, set(), set())
-            elif mode == config.DATE_MODE:
-                operations = process_files_by_date(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
-            elif mode == config.TYPE_MODE:
-                operations = process_files_by_type(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
-            else:
-                print("Invalid mode selected.")
-                return
 
+            elif backend == 'ollama':
+                image_files, text_files = separate_files_by_type(file_paths)
+                text_tuples = []
+                for fp in text_files:
+                    text_content = read_file_data(fp)
+                    if text_content is None:
+                        message = f"Unsupported or unreadable text file format: {fp}"
+                        if silent_mode:
+                            with open(log_file, 'a') as f:
+                                f.write(message + '\n')
+                        else:
+                            print(message)
+                        continue
+                    text_tuples.append((fp, text_content))
+                data_images = process_image_files_ollama(image_files, silent=silent_mode, log_file=log_file)
+                data_texts = process_text_files_ollama(text_tuples, silent=silent_mode, log_file=log_file)
+            all_data = data_images + data_texts
+            operations = compute_operations(all_data, output_path, set(), set())
+        elif mode == config.DATE_MODE:
+            operations = process_files_by_date(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
+        elif mode == config.TYPE_MODE:
+            operations = process_files_by_type(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
+        else:
+            print("Invalid mode selected.")
+            return
+
+        print("-" * 50)
+        message = "Proposed directory structure:"
+        if silent_mode:
+            with open(log_file, 'a') as f:
+                f.write(message + '\n')
+        else:
+            print(message)
+            print(os.path.abspath(output_path))
+            simulated_tree = simulate_directory_tree(operations, output_path)
+            print_simulated_tree(simulated_tree)
             print("-" * 50)
-            message = "Proposed directory structure:"
+
+        proceed = get_yes_no("Would you like to proceed with these changes? (yes/no): ")
+        if proceed:
+            os.makedirs(output_path, exist_ok=True)
+            message = "Performing file operations..."
             if silent_mode:
                 with open(log_file, 'a') as f:
                     f.write(message + '\n')
             else:
                 print(message)
-                print(os.path.abspath(output_path))
-                simulated_tree = simulate_directory_tree(operations, output_path)
-                print_simulated_tree(simulated_tree)
-                print("-" * 50)
-
-            proceed = get_yes_no("Would you like to proceed with these changes? (yes/no): ")
-            if proceed:
-                os.makedirs(output_path, exist_ok=True)
-                message = "Performing file operations..."
-                if silent_mode:
-                    with open(log_file, 'a') as f:
-                        f.write(message + '\n')
-                else:
-                    print(message)
-                execute_operations(operations, dry_run=False, silent=silent_mode, log_file=log_file)
-                message = "The files have been organized successfully."
-                if silent_mode:
-                    with open(log_file, 'a') as f:
-                        f.write("-" * 50 + '\n' + message + '\n' + "-" * 50 + '\n')
-                else:
-                    print("-" * 50)
-                    print(message)
-                    print("-" * 50)
-                break
+            execute_operations(operations, dry_run=False, silent=silent_mode, log_file=log_file)
+            message = "The files have been organized successfully."
+            if silent_mode:
+                with open(log_file, 'a') as f:
+                    f.write("-" * 50 + '\n' + message + '\n' + "-" * 50 + '\n')
             else:
-                another_sort = get_yes_no("Would you like to choose another sorting method? (yes/no): ")
-                if not another_sort:
-                    print("Operation canceled by the user.")
-                    break
-        another_directory = get_yes_no("Would you like to organize another directory? (yes/no): ")
-        if not another_directory:
+                print("-" * 50)
+                print(message)
+                print("-" * 50)
+            break
+        else:
+            another_sort = get_yes_no("Would you like to choose another sorting method? (yes/no): ")
+            if not another_sort:
+                print("Operation canceled by the user.")
+                break
+
+def main():
+    ensure_nltk_data()
+    print("-" * 50)
+    print("**NOTE: Silent mode logs all outputs to a text file instead of displaying them in the terminal.")
+    silent_mode = get_yes_no("Would you like to enable silent mode? (yes/no): ")
+    log_file = config.LOG_FILE if silent_mode else None
+
+    while True:
+        main_choice = get_main_menu_selection()
+
+        if main_choice == 'organize':
+            organize_directory_once(silent_mode, log_file)
+
+        elif main_choice == 'watch':
+            input_path, output_path = get_paths(silent_mode, log_file)
+            backend = get_backend_selection()
+            models = (None, None)
+            if backend == 'local':
+                if not silent_mode:
+                    print("Initializing local models for watch mode...")
+                initialize_models()
+                models = (image_inference, text_inference)
+
+            start_watching(input_path, output_path, backend, models, silent_mode, log_file)
+
+        elif main_choice == 'exit':
+            print("Exiting program.")
             break
 
 if __name__ == '__main__':

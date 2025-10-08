@@ -8,3 +8,7 @@ xlrd
 nltk
 rich
 python-pptx
+ollama
+llama-cpp-python
+tqdm
+watchdog

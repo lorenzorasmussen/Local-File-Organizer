@@ -1,5 +1,26 @@
 import os
 
+def get_main_menu_selection():
+    """Prompt the user to select the main operation mode."""
+    while True:
+        print("\n" + "="*50)
+        print(" " * 15 + "MAIN MENU")
+        print("="*50)
+        print("Please choose an option:")
+        print("1. Organize a Directory (One-time organization)")
+        print("2. Watch a Directory (Continuous organization)")
+        print("3. Exit")
+        print("-"*50)
+        response = input("Enter 1, 2, or 3: ").strip()
+        if response == '1':
+            return 'organize'
+        elif response == '2':
+            return 'watch'
+        elif response == '3':
+            return 'exit'
+        else:
+            print("Invalid selection. Please enter 1, 2, or 3.")
+
 def get_yes_no(prompt):
     """Prompt the user for a yes/no response."""
     while True:
@@ -13,6 +34,23 @@ def get_yes_no(prompt):
             exit()
         else:
             print("Please enter 'yes' or 'no'. To exit, type '/exit'.")
+
+def get_backend_selection():
+    """Prompt the user to select an AI backend."""
+    while True:
+        print("Please choose the AI backend to use:")
+        print("1. Ollama (requires Ollama server to be running)")
+        print("2. Local GGUF models")
+        response = input("Enter 1 or 2 (or type '/exit' to exit): ").strip()
+        if response == '/exit':
+            print("Exiting program.")
+            exit()
+        elif response == '1':
+            return 'ollama'
+        elif response == '2':
+            return 'local'
+        else:
+            print("Invalid selection. Please enter 1 or 2. To exit, type '/exit'.")
 
 def get_mode_selection():
     """Prompt the user to select a mode."""
