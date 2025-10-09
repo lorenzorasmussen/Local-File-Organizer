@@ -9,17 +9,20 @@ def get_main_menu_selection():
         print("Please choose an option:")
         print("1. Organize a Directory (One-time organization)")
         print("2. Watch a Directory (Continuous organization)")
-        print("3. Exit")
+        print("3. Find and Handle Duplicates")
+        print("4. Exit")
         print("-"*50)
-        response = input("Enter 1, 2, or 3: ").strip()
+        response = input("Enter 1, 2, 3, or 4: ").strip()
         if response == '1':
             return 'organize'
         elif response == '2':
             return 'watch'
         elif response == '3':
+            return 'duplicates'
+        elif response == '4':
             return 'exit'
         else:
-            print("Invalid selection. Please enter 1, 2, or 3.")
+            print("Invalid selection. Please enter 1, 2, 3, or 4.")
 
 def get_yes_no(prompt):
     """Prompt the user for a yes/no response."""
@@ -119,3 +122,66 @@ def print_simulated_tree(tree, prefix=''):
         if tree[key]:
             extension = '│   ' if pointer == '├── ' else '    '
             print_simulated_tree(tree[key], prefix + extension)
+
+def display_duplicates(duplicate_sets):
+    """Displays the sets of duplicate files found."""
+    if not duplicate_sets:
+        print("No duplicate files found.")
+        return
+
+    print("\n" + "="*50)
+    print(" " * 15 + "DUPLICATE FILES FOUND")
+    print("="*50)
+    for i, file_set in enumerate(duplicate_sets, 1):
+        print(f"\n--- Set {i} ---")
+        for file_path in file_set:
+            print(f"  - {file_path}")
+    print("\n" + "="*50)
+
+def get_duplicate_handling_choice():
+    """Prompts the user for how to handle duplicates."""
+    while True:
+        print("\nHow would you like to handle these duplicates?")
+        print("1. Delete all duplicates (keeps one original of each set)")
+        print("2. Move all duplicates to a separate folder")
+        print("3. Decide for each set individually")
+        print("4. Do nothing (skip)")
+        response = input("Enter 1, 2, 3, or 4: ").strip()
+        if response == '1':
+            return 'delete_all'
+        elif response == '2':
+            return 'move_all'
+        elif response == '3':
+            return 'decide_each'
+        elif response == '4':
+            return 'skip'
+        else:
+            print("Invalid selection. Please enter 1, 2, 3, or 4.")
+
+def get_individual_duplicate_action(file_set):
+    """Prompts the user for action on an individual set of duplicates."""
+    while True:
+        print("\n--- Processing Set ---")
+        for i, file_path in enumerate(file_set):
+            print(f"{i+1}. {file_path}")
+
+        print("\nChoose an action for this set:")
+        print("k <number>: Keep file number <number> and delete the rest")
+        print("s: Skip this set (do nothing)")
+        print("a: Skip all remaining sets")
+
+        action = input("Your choice: ").strip().lower()
+        parts = action.split()
+
+        if parts[0] == 's':
+            return ('skip', None)
+        if parts[0] == 'a':
+            return ('skip_all', None)
+
+        if len(parts) == 2 and parts[1].isdigit():
+            num = int(parts[1])
+            if 1 <= num <= len(file_set):
+                if parts[0] == 'k':
+                    return ('keep_one', num - 1)
+
+        print("Invalid input. Please try again. (e.g., 'k 1' to keep the first file)")

@@ -19,8 +19,17 @@ from ollama_data_processing import process_text_files_ollama, process_image_file
 from output_filter import filter_specific_output
 from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Llava15ChatHandler
-from ui import get_yes_no, get_mode_selection, get_paths, print_simulated_tree, get_backend_selection, get_main_menu_selection
+from ui import (
+    get_yes_no, get_mode_selection, get_paths, print_simulated_tree,
+    get_backend_selection, get_main_menu_selection, display_duplicates,
+    get_duplicate_handling_choice, get_individual_duplicate_action
+)
 from watch_mode import start_watching
+from duplicate_finder import find_duplicates
+from duplicate_handler import (
+    handle_duplicates_delete_all, handle_duplicates_move_all,
+    handle_individual_duplicate
+)
 
 def ensure_nltk_data():
     """Ensure that NLTK data is downloaded efficiently and quietly."""
@@ -197,6 +206,49 @@ def organize_directory_once(silent_mode, log_file):
                 print("Operation canceled by the user.")
                 break
 
+def handle_duplicates_workflow(silent_mode, log_file):
+    """Handles the workflow for finding and managing duplicate files."""
+    if not silent_mode:
+        print("\n" + "="*50)
+        print(" " * 10 + "Find and Handle Duplicate Files")
+        print("="*50)
+
+    # For finding duplicates, we only need an input path.
+    # We can reuse get_paths and just ignore the output_path.
+    input_path, _ = get_paths(silent_mode, log_file)
+
+    duplicate_sets = find_duplicates(input_path)
+    display_duplicates(duplicate_sets)
+
+    if not duplicate_sets:
+        return
+
+    choice = get_duplicate_handling_choice()
+
+    if choice == 'delete_all':
+        handle_duplicates_delete_all(duplicate_sets, silent_mode, log_file)
+        print("\nDuplicate deletion process completed.")
+
+    elif choice == 'move_all':
+        move_to_folder = os.path.join(input_path, "duplicates")
+        handle_duplicates_move_all(duplicate_sets, move_to_folder, silent_mode, log_file)
+        print(f"\nDuplicates moved to {move_to_folder}.")
+
+    elif choice == 'decide_each':
+        for file_set in duplicate_sets:
+            action, index_to_keep = get_individual_duplicate_action(file_set)
+            if action == 'skip':
+                continue
+            if action == 'skip_all':
+                print("Skipping all remaining sets.")
+                break
+            if action == 'keep_one':
+                handle_individual_duplicate(file_set, action, index_to_keep, silent_mode, log_file)
+        print("\nIndividual duplicate handling completed.")
+
+    elif choice == 'skip':
+        print("\nSkipping duplicate handling.")
+
 def main():
     ensure_nltk_data()
     print("-" * 50)
@@ -221,6 +273,9 @@ def main():
                 models = (image_inference, text_inference)
 
             start_watching(input_path, output_path, backend, models, silent_mode, log_file)
+
+        elif main_choice == 'duplicates':
+            handle_duplicates_workflow(silent_mode, log_file)
 
         elif main_choice == 'exit':
             print("Exiting program.")
