@@ -113,15 +113,11 @@ Now generate the filename.
 Output only the filename, without any additional text.
 
 Filename:"""
-    filename_response = text_inference.create_completion(
-        prompt=filename_prompt,
-        max_tokens=3000,
-        temperature=0.5, # Note: these are text_inference params
-        top_k=3,
-        top_p=0.3,
-        stop=[]
-    )
-    filename = filename_response['choices'][0]['text'].strip()
+    filename_response = text_inference.create_completion(filename_prompt)
+    if filename_response['choices'] and filename_response['choices'][0]['text']:
+        filename = filename_response['choices'][0]['text'].strip()
+    else:
+        filename = ""
     # Remove 'Filename:' prefix if present
     filename = re.sub(r'^Filename:\s*', '', filename, flags=re.IGNORECASE).strip()
     progress.update(task_id, advance=1 / total_steps)
@@ -148,15 +144,11 @@ Now generate the category.
 Output only the category, without any additional text.
 
 Category:"""
-    foldername_response = text_inference.create_completion(
-        prompt=foldername_prompt,
-        max_tokens=3000,
-        temperature=0.5, # Note: these are text_inference params
-        top_k=3,
-        top_p=0.3,
-        stop=[]
-    )
-    foldername = foldername_response['choices'][0]['text'].strip()
+    foldername_response = text_inference.create_completion(foldername_prompt)
+    if foldername_response['choices'] and foldername_response['choices'][0]['text']:
+        foldername = foldername_response['choices'][0]['text'].strip()
+    else:
+        foldername = ""
     # Remove 'Category:' prefix if present
     foldername = re.sub(r'^Category:\s*', '', foldername, flags=re.IGNORECASE).strip()
     progress.update(task_id, advance=1 / total_steps)

@@ -18,15 +18,11 @@ Text: {text}
 
 Summary:"""
 
-    response = text_inference.create_completion(
-        prompt=prompt,
-        max_tokens=3000,  # from max_new_tokens
-        temperature=0.5,
-        top_k=3,
-        top_p=0.3,
-        stop=[]  # from stop_words
-    )
-    summary = response['choices'][0]['text'].strip()
+    response = text_inference.create_completion(prompt)
+    if response['choices'] and response['choices'][0]['text']:
+        summary = response['choices'][0]['text'].strip()
+    else:
+        summary = ""
     return summary
 
 def process_single_text_file(args, text_inference, silent=False, log_file=None):
