@@ -10,6 +10,23 @@ from data_processing_common import (
     process_files_by_date,
     process_files_by_type,
 )
+from text_data_processing import process_text_files
+from image_data_processing import process_image_files
+from ollama_data_processing import process_text_files_ollama, process_image_files_ollama
+from output_filter import filter_specific_output
+from llama_cpp import Llama
+from llama_cpp.llama_chat_format import Llava15ChatHandler
+from ui import (
+    get_yes_no, get_mode_selection, get_paths, print_simulated_tree,
+    get_backend_selection, get_main_menu_selection, display_duplicates,
+    get_duplicate_handling_choice, get_individual_duplicate_action
+)
+from watch_mode import start_watching
+from duplicate_finder import find_duplicates
+from duplicate_handler import (
+    handle_duplicates_delete_all, handle_duplicates_move_all,
+    handle_individual_duplicate
+)
 from output_filter import filter_specific_output
 from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Llava15ChatHandler
@@ -75,6 +92,8 @@ def simulate_directory_tree(operations, base_path):
             current_level = current_level[part]
     return tree
 
+def organize_directory_once(silent_mode, log_file):
+    """Handles the one-time organization of a directory."""
 def one_time_organization(silent_mode, log_file):
     """Handle one-time file organization."""
     input_path, output_path = get_paths(silent_mode, log_file)
@@ -87,6 +106,79 @@ def one_time_organization(silent_mode, log_file):
             f.write(message + '\n')
     else:
         print(message)
+
+    if not silent_mode:
+        print("-" * 50)
+        print("Directory tree before organizing:")
+        display_directory_tree(input_path)
+        print("*" * 50)
+
+    while True:
+        mode = get_mode_selection()
+        if mode == config.CONTENT_MODE:
+            backend = get_backend_selection()
+            if backend == 'local':
+                if not silent_mode:
+                    print("Checking if the model is already downloaded. If not, downloading it now.")
+                initialize_models()
+                if not silent_mode:
+                    print("*" * 50)
+                    print("The file upload was successful. Processing may take a few minutes.")
+                    print("*" * 50)
+                image_files, text_files = separate_files_by_type(file_paths)
+                text_tuples = []
+                for fp in text_files:
+                    text_content = read_file_data(fp)
+                    if text_content is None:
+                        message = f"Unsupported or unreadable text file format: {fp}"
+                        if silent_mode:
+                            with open(log_file, 'a') as f:
+                                f.write(message + '\n')
+                        else:
+                            print(message)
+                        continue
+                    text_tuples.append((fp, text_content))
+                data_images = process_image_files(image_files, image_inference, text_inference, silent=silent_mode, log_file=log_file)
+                data_texts = process_text_files(text_tuples, text_inference, silent=silent_mode, log_file=log_file)
+
+            elif backend == 'ollama':
+                image_files, text_files = separate_files_by_type(file_paths)
+                text_tuples = []
+                for fp in text_files:
+                    text_content = read_file_data(fp)
+                    if text_content is None:
+                        message = f"Unsupported or unreadable text file format: {fp}"
+                        if silent_mode:
+                            with open(log_file, 'a') as f:
+                                f.write(message + '\n')
+                        else:
+                            print(message)
+                        continue
+                    text_tuples.append((fp, text_content))
+                data_images = process_image_files_ollama(image_files, silent=silent_mode, log_file=log_file)
+                data_texts = process_text_files_ollama(text_tuples, silent=silent_mode, log_file=log_file)
+            all_data = data_images + data_texts
+            operations = compute_operations(all_data, output_path, set(), set())
+        elif mode == config.DATE_MODE:
+            operations = process_files_by_date(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
+        elif mode == config.TYPE_MODE:
+            operations = process_files_by_type(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
+        else:
+            print("Invalid mode selected.")
+            return
+
+        print("-" * 50)
+        message = "Proposed directory structure:"
+        if silent_mode:
+            with open(log_file, 'a') as f:
+                f.write(message + '\n')
+        else:
+            print(message)
+            print(os.path.abspath(output_path))
+            simulated_tree = simulate_directory_tree(operations, output_path)
+            print_simulated_tree(simulated_tree)
+            print("-" * 50)
+
     if not silent_mode:
         print("-" * 50)
         print("Directory tree before organizing:")
