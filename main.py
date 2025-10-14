@@ -4,11 +4,8 @@ import config
 from file_utils import (
     display_directory_tree,
     collect_file_paths,
-    separate_files_by_type,
-    read_file_data
 )
 from data_processing_common import (
-    compute_operations,
     execute_operations,
     process_files_by_date,
     process_files_by_type,
@@ -30,6 +27,14 @@ from duplicate_handler import (
     handle_duplicates_delete_all, handle_duplicates_move_all,
     handle_individual_duplicate
 )
+from output_filter import filter_specific_output
+from llama_cpp import Llama
+from llama_cpp.llama_chat_format import Llava15ChatHandler
+from ui import get_yes_no, get_mode_selection, get_paths, print_simulated_tree, get_main_menu_selection, get_ai_backend_selection
+from organize_files import organize_files_with_ai
+from ollama import Client
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 def ensure_nltk_data():
     """Ensure that NLTK data is downloaded efficiently and quietly."""
@@ -42,46 +47,37 @@ def ensure_nltk_data():
 image_inference = None
 text_inference = None
 
-def initialize_models():
-    """Initialize the models if they haven't been initialized yet."""
+def initialize_local_models():
+    """Initialize the local GGUF models if they haven't been initialized yet."""
     global image_inference, text_inference
 
     if image_inference is None or text_inference is None:
         model_path = "llava-v1.6-vicuna-7b:q4_0"
         model_path_text = "Llama3.2-3B-Instruct:q3_K_M"
 
-        # For LLaVA model (image_inference)
-        # Assumes mmproj file is named by appending "-mmproj.gguf" to the main model name
-        # e.g. if model_path is "llava-v1.6-vicuna-7b:q4_0", mmproj is "llava-v1.6-vicuna-7b-mmproj.gguf"
-        # The :q4_0 part is a quantization indicator and should be removed for the mmproj filename.
-        base_model_name = model_path.split(':')[0] # Get "llava-v1.6-vicuna-7b"
+        base_model_name = model_path.split(':')[0]
         model_path_llava_mmproj = f"{base_model_name}-mmproj.gguf"
 
-        # Use the filter_specific_output context manager
         with filter_specific_output():
-            # Initialize the LLaVA chat handler
             chat_handler_llava = Llava15ChatHandler(clip_model_path=model_path_llava_mmproj, verbose=True)
-
-            # Initialize the image inference model (LLaVA)
             image_inference = Llama(
-                model_path=model_path,  # This is the main LLaVA model GGUF
+                model_path=model_path,
                 chat_handler=chat_handler_llava,
-                n_ctx=2048,  # Default context size, can be adjusted
-                n_gpu_layers=0, # Ensure CPU usage
-                verbose=True # For debugging
+                n_ctx=2048,
+                n_gpu_layers=0,
+                verbose=True
             )
-
-            # Initialize the text inference model
             text_inference = Llama(
                 model_path=model_path_text,
-                n_ctx=2048,  # Default context size
-                n_gpu_layers=0, # Ensure CPU usage
-                verbose=True # For debugging
+                n_ctx=2048,
+                n_gpu_layers=0,
+                verbose=True
             )
         print("**----------------------------------------------**")
         print("**       Image inference model initialized      **")
         print("**       Text inference model initialized       **")
         print("**----------------------------------------------**")
+    return {'image': image_inference, 'text': text_inference}
 
 def simulate_directory_tree(operations, base_path):
     """Simulate the directory tree based on the proposed operations."""
@@ -98,6 +94,8 @@ def simulate_directory_tree(operations, base_path):
 
 def organize_directory_once(silent_mode, log_file):
     """Handles the one-time organization of a directory."""
+def one_time_organization(silent_mode, log_file):
+    """Handle one-time file organization."""
     input_path, output_path = get_paths(silent_mode, log_file)
     start_time = time.time()
     file_paths = collect_file_paths(input_path)
@@ -181,6 +179,60 @@ def organize_directory_once(silent_mode, log_file):
             print_simulated_tree(simulated_tree)
             print("-" * 50)
 
+    if not silent_mode:
+        print("-" * 50)
+        print("Directory tree before organizing:")
+        display_directory_tree(input_path)
+        print("*" * 50)
+
+    while True:
+        mode = get_mode_selection()
+        if mode == config.CONTENT_MODE:
+            ai_backend = get_ai_backend_selection()
+            client_or_model = None
+            model_name = None
+            if ai_backend == 'Ollama':
+                client_or_model = Client(host='http://localhost:11434')
+                model_name = 'moondream'
+            else:
+                if not silent_mode:
+                    print("Checking if the model is already downloaded. If not, downloading it now.")
+                client_or_model = initialize_local_models()
+
+            if not silent_mode:
+                print("*" * 50)
+                print("The file upload was successful. Processing may take a few minutes.")
+                print("*" * 50)
+
+            operations = organize_files_with_ai(
+                file_paths,
+                output_path,
+                ai_backend,
+                client_or_model,
+                model_name,
+                silent_mode,
+                log_file
+            )
+        elif mode == config.DATE_MODE:
+            operations = process_files_by_date(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
+        elif mode == config.TYPE_MODE:
+            operations = process_files_by_type(file_paths, output_path, dry_run=False, silent=silent_mode, log_file=log_file)
+        else:
+            print("Invalid mode selected.")
+            return
+
+        print("-" * 50)
+        message = "Proposed directory structure:"
+        if silent_mode:
+            with open(log_file, 'a') as f:
+                f.write(message + '\n')
+        else:
+            print(message)
+            print(os.path.abspath(output_path))
+            simulated_tree = simulate_directory_tree(operations, output_path)
+            print_simulated_tree(simulated_tree)
+            print("-" * 50)
+
         proceed = get_yes_no("Would you like to proceed with these changes? (yes/no): ")
         if proceed:
             os.makedirs(output_path, exist_ok=True)
@@ -206,48 +258,52 @@ def organize_directory_once(silent_mode, log_file):
                 print("Operation canceled by the user.")
                 break
 
-def handle_duplicates_workflow(silent_mode, log_file):
-    """Handles the workflow for finding and managing duplicate files."""
-    if not silent_mode:
-        print("\n" + "="*50)
-        print(" " * 10 + "Find and Handle Duplicate Files")
-        print("="*50)
+class WatcherEventHandler(FileSystemEventHandler):
+    def __init__(self, output_path, mode, silent_mode, log_file, ai_backend=None, client_or_model=None, model_name=None):
+        self.output_path = output_path
+        self.mode = mode
+        self.silent_mode = silent_mode
+        self.log_file = log_file
+        self.ai_backend = ai_backend
+        self.client_or_model = client_or_model
+        self.model_name = model_name
 
-    # For finding duplicates, we only need an input path.
-    # We can reuse get_paths and just ignore the output_path.
-    input_path, _ = get_paths(silent_mode, log_file)
+    def on_created(self, event):
+        if not event.is_directory:
+            print(f"New file detected: {event.src_path}")
+            file_path = [event.src_path]
+            operations = []
+            if self.mode == config.CONTENT_MODE:
+                operations = organize_files_with_ai(
+                    file_path,
+                    self.output_path,
+                    self.ai_backend,
+                    self.client_or_model,
+                    self.model_name,
+                    self.silent_mode,
+                    self.log_file
+                )
+            elif self.mode == config.DATE_MODE:
+                operations = process_files_by_date(file_path, self.output_path, dry_run=False, silent=self.silent_mode, log_file=self.log_file)
+            elif self.mode == config.TYPE_MODE:
+                operations = process_files_by_type(file_path, self.output_path, dry_run=False, silent=self.silent_mode, log_file=self.log_file)
 
-    duplicate_sets = find_duplicates(input_path)
-    display_duplicates(duplicate_sets)
+            execute_operations(operations, dry_run=False, silent=self.silent_mode, log_file=self.log_file)
+            print(f"Organized {event.src_path}")
 
-    if not duplicate_sets:
-        return
-
-    choice = get_duplicate_handling_choice()
-
-    if choice == 'delete_all':
-        handle_duplicates_delete_all(duplicate_sets, silent_mode, log_file)
-        print("\nDuplicate deletion process completed.")
-
-    elif choice == 'move_all':
-        move_to_folder = os.path.join(input_path, "duplicates")
-        handle_duplicates_move_all(duplicate_sets, move_to_folder, silent_mode, log_file)
-        print(f"\nDuplicates moved to {move_to_folder}.")
-
-    elif choice == 'decide_each':
-        for file_set in duplicate_sets:
-            action, index_to_keep = get_individual_duplicate_action(file_set)
-            if action == 'skip':
-                continue
-            if action == 'skip_all':
-                print("Skipping all remaining sets.")
-                break
-            if action == 'keep_one':
-                handle_individual_duplicate(file_set, action, index_to_keep, silent_mode, log_file)
-        print("\nIndividual duplicate handling completed.")
-
-    elif choice == 'skip':
-        print("\nSkipping duplicate handling.")
+def start_watching(input_path, output_path, mode, silent_mode, log_file, ai_backend=None, client_or_model=None, model_name=None):
+    """Start watching a directory for new files."""
+    event_handler = WatcherEventHandler(output_path, mode, silent_mode, log_file, ai_backend, client_or_model, model_name)
+    observer = Observer()
+    observer.schedule(event_handler, input_path, recursive=True)
+    observer.start()
+    print(f"Watching directory: {input_path}")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
 
 def main():
     ensure_nltk_data()
@@ -257,28 +313,31 @@ def main():
     log_file = config.LOG_FILE if silent_mode else None
 
     while True:
-        main_choice = get_main_menu_selection()
+        main_menu_selection = get_main_menu_selection()
+        if main_menu_selection == 'one-time':
+            one_time_organization(silent_mode, log_file)
+            another_directory = get_yes_no("Would you like to organize another directory? (yes/no): ")
+            if not another_directory:
+                break
+        elif main_menu_selection == 'watch':
+            input_path, output_path = get_paths( silent_mode, log_file)
+            mode = get_mode_selection()
 
-        if main_choice == 'organize':
-            organize_directory_once(silent_mode, log_file)
+            ai_backend = None
+            client_or_model = None
+            model_name = None
 
-        elif main_choice == 'watch':
-            input_path, output_path = get_paths(silent_mode, log_file)
-            backend = get_backend_selection()
-            models = (None, None)
-            if backend == 'local':
-                if not silent_mode:
-                    print("Initializing local models for watch mode...")
-                initialize_models()
-                models = (image_inference, text_inference)
+            if mode == config.CONTENT_MODE:
+                ai_backend = get_ai_backend_selection()
+                if ai_backend == 'Ollama':
+                    client_or_model = Client(host='http://localhost:11434')
+                    model_name = 'moondream'
+                else:
+                    client_or_model = initialize_local_models()
 
-            start_watching(input_path, output_path, backend, models, silent_mode, log_file)
-
-        elif main_choice == 'duplicates':
-            handle_duplicates_workflow(silent_mode, log_file)
-
-        elif main_choice == 'exit':
-            print("Exiting program.")
+            start_watching(input_path, output_path, mode, silent_mode, log_file, ai_backend, client_or_model, model_name)
+            break
+        elif main_menu_selection == 'exit':
             break
 
 if __name__ == '__main__':

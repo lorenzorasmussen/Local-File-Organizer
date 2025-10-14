@@ -38,22 +38,36 @@ def get_yes_no(prompt):
         else:
             print("Please enter 'yes' or 'no'. To exit, type '/exit'.")
 
-def get_backend_selection():
+def get_main_menu_selection():
+    """Prompt the user to select the main operation mode."""
+    while True:
+        print("Main Menu:")
+        print("1. One-time Organization")
+        print("2. Watch Folder (Continuous Organization)")
+        print("3. Exit")
+        response = input("Enter 1, 2, or 3: ").strip()
+        if response == '1':
+            return 'one-time'
+        elif response == '2':
+            return 'watch'
+        elif response == '3':
+            return 'exit'
+        else:
+            print("Invalid selection. Please enter 1, 2, or 3.")
+
+def get_ai_backend_selection():
     """Prompt the user to select an AI backend."""
     while True:
         print("Please choose the AI backend to use:")
-        print("1. Ollama (requires Ollama server to be running)")
-        print("2. Local GGUF models")
-        response = input("Enter 1 or 2 (or type '/exit' to exit): ").strip()
-        if response == '/exit':
-            print("Exiting program.")
-            exit()
-        elif response == '1':
-            return 'ollama'
+        print("1. Ollama")
+        print("2. Local GGUF")
+        response = input("Enter 1 or 2: ").strip()
+        if response == '1':
+            return 'Ollama'
         elif response == '2':
-            return 'local'
+            return 'Local GGUF'
         else:
-            print("Invalid selection. Please enter 1 or 2. To exit, type '/exit'.")
+            print("Invalid selection. Please enter 1 or 2.")
 
 def get_mode_selection():
     """Prompt the user to select a mode."""
