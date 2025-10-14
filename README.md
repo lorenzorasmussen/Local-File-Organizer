@@ -52,12 +52,11 @@ After:
 ## Updates 🚀
 
 **[2024/09] v0.0.2**:
-* Featured by [Nexa Gallery](https://nexaai.com/gallery) and [Nexa SDK Cookbook](https://github.com/NexaAI/nexa-sdk/tree/main/examples)!
 * Dry Run Mode: check sorting results before committing changes
 * Silent Mode: save all logs to a txt file for quieter operation
 * Added file support:  `.md`, .`excel`, `.ppt`, and `.csv` 
 * Three sorting options: by content, by date, and by type
-* The default text model is now [Llama3.2 3B](https://nexaai.com/meta/Llama3.2-3B-Instruct/gguf-q3_K_M/file)
+* The default text model is a GGUF version of Llama 3.2 3B (or similar).
 * Improved CLI interaction experience
 * Added real-time progress bar for file analysis
 
@@ -83,13 +82,13 @@ This intelligent file organizer harnesses the power of advanced AI models, inclu
 
 * Scanning a specified input directory for files.
 * Content Understanding: 
-  - **Textual Analysis**: Uses the [Llama3.2 3B](https://nexaai.com/meta/Llama3.2-3B-Instruct/gguf-q3_K_M/file) to analyze and summarize text-based content, generating relevant descriptions and filenames.
-  - **Visual Content Analysis**: Uses the [LLaVA-v1.6](https://nexaai.com/liuhaotian/llava-v1.6-vicuna-7b/gguf-q4_0/file) , based on Vicuna-7B, to interpret visual files such as images, providing context-aware categorization and descriptions.
+  - **Textual Analysis**: Uses GGUF-formatted language models (e.g., Llama 3.2) loaded via `llama-cpp-python` to analyze and summarize text-based content, generating relevant descriptions and filenames.
+  - **Visual Content Analysis**: Uses GGUF-formatted vision-language models (e.g., LLaVA 1.5/1.6) loaded via `llama-cpp-python` to interpret visual files such as images, providing context-aware categorization and descriptions.
 
 * Understanding the content of your files (text, images, and more) to generate relevant descriptions, folder names, and filenames.
 * Organizing the files into a new directory structure based on the generated metadata.
 
-The best part? All AI processing happens 100% on your local device using the [Nexa SDK](https://github.com/NexaAI/nexa-sdk). No internet connection required, no data leaves your computer, and no AI API is needed - keeping your files completely private and secure.
+The best part? All AI processing happens 100% on your local device using `llama-cpp-python`. No internet connection required, no data leaves your computer, and no AI API is needed - keeping your files completely private and secure.
 
 
 ## Supported File Types 📁
@@ -109,7 +108,7 @@ The best part? All AI processing happens 100% on your local device using the [Ne
 
 ## Installation 🛠
 
-> For SDK installation and model-related issues, please post on [here](https://github.com/NexaAI/nexa-sdk/issues).
+> For issues related to `llama-cpp-python` installation, please refer to the [official `llama-cpp-python` GitHub issues page](https://github.com/abetlen/llama-cpp-python/issues). For model-related questions or if you need to find GGUF models, Hugging Face is a great resource.
 
 ### 1. Install Python
 
@@ -143,23 +142,26 @@ Activate the environment:
 conda activate local_file_organizer
 ```
 
-### 4. Install Nexa SDK ️
+### 4. Install Core LLM Engine (`llama-cpp-python`)
 
-#### CPU Installation
-To install the CPU version of Nexa SDK, run:
+This project uses `llama-cpp-python` for local Large Language Model (LLM) inference.
+
+**Recommended Installation (macOS Intel & some other platforms):**
+
+For macOS Intel users and potentially other platforms, try installing `llama-cpp-python` using pre-compiled CPU wheels. This can help avoid local compilation and the need for CMake and a C++ compiler directly:
 ```bash
-pip install nexaai --prefer-binary --index-url https://nexaai.github.io/nexa-sdk/whl/cpu --extra-index-url https://pypi.org/simple --no-cache-dir
+pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 ```
 
-#### GPU Installation (Metal - macOS)
-For the GPU version supporting Metal (macOS), run:
-```bash
-CMAKE_ARGS="-DGGML_METAL=ON -DSD_METAL=ON" pip install nexaai --prefer-binary --index-url https://nexaai.github.io/nexa-sdk/whl/metal --extra-index-url https://pypi.org/simple --no-cache-dir
-```
-For detailed installation instructions of Nexa SDK for **CUDA** and **AMD GPU** support, please refer to the [Installation section](https://github.com/NexaAI/nexa-sdk?tab=readme-ov-file#installation) in the main README.
+**Other Platforms / Source Installation:**
 
+If the above command doesn't work or you are on a different platform (e.g., Linux, Windows, macOS Apple Silicon for GPU support), you might need to install `llama-cpp-python` from source or use other specific wheels. This typically requires CMake and a C++ compiler (e.g., Xcode Command Line Tools on macOS, `build-essential` on Linux).
 
-### 5. Install Dependencies 
+For detailed installation instructions, including GPU support (Metal for macOS, CUDA for NVIDIA, ROCm for AMD), please refer to the [official `llama-cpp-python` documentation](https://llama-cpp-python.readthedocs.io/en/latest/installation/).
+
+**Note on `cmake` in `requirements.txt`:** The `requirements.txt` file includes `cmake`. This is listed because `llama-cpp-python` often needs it for compilation if a binary wheel isn't available or suitable for your system. Installing `cmake` via pip (`pip install cmake`) can sometimes fulfill this dependency for the `llama-cpp-python` build process.
+
+### 5. Install Dependencies
 
 1. Ensure you are in the project directory:
    ```zsh
@@ -172,11 +174,7 @@ For detailed installation instructions of Nexa SDK for **CUDA** and **AMD GPU** 
    pip install -r requirements.txt
    ```
 
-**Note:** If you encounter issues with any packages, install them individually:
-
-```zsh
-pip install nexa Pillow pytesseract PyMuPDF python-docx
-```
+**Note:** After successfully setting up `llama-cpp-python` as described in Step 4, ensure all other dependencies are installed by running `pip install -r requirements.txt`. If you encounter issues with specific packages, you may need to consult their respective documentation for installation troubleshooting. The `requirements.txt` file includes `cmake` as it's often a build dependency for `llama-cpp-python`.
 
 With the environment activated and dependencies installed, run the script using:
 
@@ -187,11 +185,10 @@ python main.py
 
 ## Notes
 
-- **SDK Models:**
-  - The script uses `NexaVLMInference` and `NexaTextInference` models [usage](https://docs.nexaai.com/sdk/python-interface/gguf).
-  - Ensure you have access to these models and they are correctly set up.
-  - You may need to download model files or configure paths.
-
+- **LLM Models:**
+  - The script uses `llama-cpp-python` to load and run GGUF-formatted Large Language Models (LLMs) for text analysis (e.g., Llama 3.2) and vision-language tasks (e.g., LLaVA).
+  - You will need to download GGUF model files separately.
+  - Ensure the model paths in `main.py` (e.g., `model_path` and `model_path_text`, and `model_path_llava_mmproj`) are correctly set to point to your downloaded GGUF files. You can find many GGUF models on Hugging Face.
 
 - **Dependencies:**
   - **pytesseract:** Requires Tesseract OCR installed on your system.
